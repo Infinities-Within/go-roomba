@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/xa4a/go-roomba"
+	"github.com/infinities-within/go-roomba"
 )
 
 const (

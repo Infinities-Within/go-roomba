@@ -13,8 +13,8 @@ import (
 	"io"
 	"log"
 
-	"github.com/xa4a/go-roomba"
-	"github.com/xa4a/go-roomba/constants"
+	"github.com/infinities-within/go-roomba"
+	"github.com/infinities-within/go-roomba/constants"
 )
 
 // Roomba simulator instance. Should be constructed with MakeRoombaSim()
@@ -31,7 +31,7 @@ type RoombaSimulator struct {
 
 // MockSensorValues contains mapping of sensor codes to sensor values returned
 // by a RoombaSimulator object on sensor requests.
-var MockSensorValues = map[byte][]byte{
+var MockSensorValues = map[constants.SensorCode][]byte{
 	constants.SENSOR_BUMP_WHEELS_DROPS:       []byte{3},
 	constants.SENSOR_VIRTUAL_WALL:            []byte{5},
 	constants.SENSOR_CLIFF_RIGHT:             []byte{42},
@@ -72,9 +72,9 @@ func (sim *RoombaSimulator) executeCMD() error {
 	if len(cmdBuf) != 1 {
 		return fmt.Errorf("failed reading opcode")
 	}
-	switch cmdBuf[0] {
-	case constants.OpCodes["Sensors"]:
-		packetId := sim.read(1)[0]
+	switch constants.OpCode(cmdBuf[0]) {
+	case constants.Sensors:
+		packetId := constants.SensorCode(sim.read(1)[0])
 		value, ok := MockSensorValues[packetId]
 		if !ok {
 			if packetId == constants.SENSOR_REQUESTED_RADIUS {
@@ -87,10 +87,10 @@ func (sim *RoombaSimulator) executeCMD() error {
 		}
 		log.Printf("sensor %d value: %v", packetId, value)
 		sim.write(value)
-	case constants.OpCodes["QueryList"]:
+	case constants.QueryList:
 		nPackets := sim.read(1)[0]
 		for i := 0; i < int(nPackets); i++ {
-			packetId := sim.read(1)[0]
+			packetId := constants.SensorCode(sim.read(1)[0])
 			value, ok := MockSensorValues[packetId]
 			if !ok {
 				if packetId == constants.SENSOR_REQUESTED_RADIUS {
@@ -104,11 +104,11 @@ func (sim *RoombaSimulator) executeCMD() error {
 			log.Printf("sensor %d value: %v", packetId, value)
 			sim.write(value)
 		}
-	case constants.OpCodes["Stream"]:
+	case constants.SensorStream:
 		nBytes := sim.read(1)[0]
-		packetIds := make([]byte, nBytes)
+		packetIds := make([]constants.SensorCode, nBytes)
 		for i := byte(0); i < nBytes; i++ {
-			packetIds[i] = sim.read(1)[0]
+			packetIds[i] = constants.SensorCode(sim.read(1)[0])
 		}
 		// Contains just packet ids and values, no headers.
 		sensorValues := bytes.Buffer{}
@@ -120,7 +120,7 @@ func (sim *RoombaSimulator) executeCMD() error {
 			} else {
 				log.Printf("sensor %d value: %v", packetIds[i], mockValue)
 			}
-			sensorValues.WriteByte(packetIds[i])
+			sensorValues.WriteByte(byte(packetIds[i]))
 			sensorValues.Write(mockValue)
 		}
 
@@ -140,23 +140,23 @@ func (sim *RoombaSimulator) executeCMD() error {
 		log.Printf("checksum: %d", checksum)
 
 		sim.write(output.Bytes())
-	case constants.OpCodes["Start"]:
+	case constants.Start:
 		log.Printf("switched to passive mode")
-	case constants.OpCodes["Safe"]:
+	case constants.Safe:
 		log.Printf("switched to safe mode")
-	case constants.OpCodes["ResumeStream"]:
+	case constants.PauseResumeStream:
 		if sim.read(1)[0] == byte(0) {
 			log.Printf("stream paused")
 		} else {
 			log.Printf("stream resumed")
 		}
-	case constants.OpCodes["DirectDrive"]:
+	case constants.DriveDirect:
 		data := sim.read(4)
-		var rigthVelocity, leftVelocity int16
-		binary.Read(bytes.NewReader(data[:2]), binary.BigEndian, &rigthVelocity)
-		binary.Read(bytes.NewReader(data[2:4]), binary.BigEndian, &leftVelocity)
-		log.Printf("DirectDrive: %d, %d (%v)", rigthVelocity, leftVelocity, data)
-	case constants.OpCodes["Drive"]:
+		var rightVelocity, leftVelocity int16
+		_ = binary.Read(bytes.NewReader(data[:2]), binary.BigEndian, &rightVelocity)
+		_ = binary.Read(bytes.NewReader(data[2:4]), binary.BigEndian, &leftVelocity)
+		log.Printf("DirectDrive: %d, %d (%v)", rightVelocity, leftVelocity, data)
+	case constants.Drive:
 		sim.RequestedVelocity = sim.read(2)
 		sim.RequestedRadius = sim.read(2)
 		log.Printf("Drive: %d, %d", sim.RequestedVelocity, sim.RequestedRadius)

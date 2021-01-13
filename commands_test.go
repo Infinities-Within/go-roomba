@@ -4,8 +4,8 @@ package roomba_test
 import (
 	"testing"
 
-	"github.com/xa4a/go-roomba/constants"
-	rt "github.com/xa4a/go-roomba/testing"
+	"github.com/infinities-within/go-roomba/constants"
+	rt "github.com/infinities-within/go-roomba/testing"
 )
 
 func TestDrive(t *testing.T) {
@@ -17,10 +17,10 @@ func TestDrive(t *testing.T) {
 }
 
 func TestLEDs(t *testing.T) {
-	expected := []byte{139, 4, 0, 128}
+	expected := []byte{139, 2, 0, 128}
 	r := rt.MakeTestRoomba()
 	defer rt.ClearTestRoomba()
-	r.LEDs(false, true, false, false, 0, 128)
+	r.LEDs(false, true, 0, 128)
 	rt.VerifyWritten(r, expected, t)
 }
 
@@ -30,7 +30,7 @@ func TestQueryLists(t *testing.T) {
 	defer rt.ClearTestRoomba()
 
 	expected_input := []byte{149, 2, 7, 13}
-	res, err := r.QueryList([]byte{
+	res, err := r.QueryList([]constants.SensorCode{
 		constants.SENSOR_BUMP_WHEELS_DROPS,
 		constants.SENSOR_VIRTUAL_WALL})
 	if err != nil {
@@ -54,7 +54,7 @@ func TestStream(t *testing.T) {
 	defer rt.ClearTestRoomba()
 
 	expected_input := []byte{148, 2, 29, 13}
-	out, err := r.Stream([]byte{
+	out, err := r.Stream([]constants.SensorCode{
 		constants.SENSOR_CLIFF_FRONT_LEFT_SIGNAL,
 		constants.SENSOR_VIRTUAL_WALL})
 	if err != nil {
@@ -75,7 +75,7 @@ func TestPauseStream(t *testing.T) {
 	r := rt.MakeTestRoomba()
 	defer rt.ClearTestRoomba()
 	r.PauseStream()
-	out, _ := r.Stream([]byte{})
+	out, _ := r.Stream([]constants.SensorCode{})
 	_, ok := <-out
 	if ok {
 		t.Fatalf("non-empty channel return by empty stream")

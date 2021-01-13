@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"io"
 	"testing"
+	"time"
 
-	"github.com/xa4a/go-roomba"
-	"github.com/xa4a/go-roomba/sim"
+	"github.com/infinities-within/go-roomba"
+	"github.com/infinities-within/go-roomba/sim"
 )
 
 var roombaSim *sim.RoombaSimulator
@@ -29,6 +30,8 @@ func ClearTestRoomba() {
 }
 
 func VerifyWritten(r *roomba.Roomba, expected []byte, t *testing.T) {
+	// TODO : Rewrite xa4a's async read/write thing into something that's consistent
+	time.Sleep(time.Millisecond * 100)
 	actual := make([]byte, len(expected))
 	roombaSim.ReadBytes.Read(actual)
 	fmt.Println("Actual: ", actual)

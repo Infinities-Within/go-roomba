@@ -26,27 +26,21 @@ import (
 	"io"
 	"log"
 
-	"github.com/xa4a/go-roomba/constants"
+	"github.com/infinities-within/go-roomba/constants"
 )
 
-func to_byte(b bool) byte {
-	var res byte
-	switch b {
-	case false:
-		res = 0
-	case true:
-		res = 1
+func toByte(b bool) byte {
+	if b {
+		return 1
 	}
-	return res
+	return 0
 }
 
-var OpCodes = constants.OpCodes
-
 // MakeRoomba initializes a new Roomba structure and sets up a serial port.
-// By default, Roomba communicates at 115200 baud.
-func MakeRoomba(port_name string) (*Roomba, error) {
-	roomba := &Roomba{PortName: port_name, StreamPaused: make(chan bool, 1)}
-	baud := uint(115200)
+// By default, Roomba communicates at 57600 baud.
+func MakeRoomba(portName string) (*Roomba, error) {
+	roomba := &Roomba{PortName: portName, StreamPaused: make(chan bool, 1)}
+	baud := uint(57600)
 	err := roomba.Open(baud)
 	return roomba, err
 }
@@ -54,58 +48,51 @@ func MakeRoomba(port_name string) (*Roomba, error) {
 // Start command starts the OI. You must always send the Start command before
 // sending any other commands to the OI.
 // Note: Use the Start command (128) to change the mode to Passive.
-func (this *Roomba) Start() error {
-	return this.WriteByte(OpCodes["Start"])
+func (roomba *Roomba) Start() error {
+	return roomba.WriteByte(constants.Start)
 }
 
 // TODO: Baud command.
 
 // Passive switches Roomba to passive mode by sending the Start command.
-func (this *Roomba) Passive() error {
-	return this.Start()
+func (roomba *Roomba) Passive() error {
+	return roomba.Start()
 }
 
 // This command puts the OI into Safe mode, enabling user control of Roomba.
 // It turns off all LEDs.
-func (this *Roomba) Safe() error {
-	return this.WriteByte(OpCodes["Safe"])
+func (roomba *Roomba) Safe() error {
+	return roomba.WriteByte(constants.Safe)
 }
 
 // Full command gives you complete control over Roomba by putting the OI into
 // Full mode, and turning off the cliff, wheel-drop and internal charger safety
 // features.
-func (this *Roomba) Full() error {
-	return this.WriteByte(OpCodes["Full"])
+func (roomba *Roomba) Full() error {
+	return roomba.WriteByte(constants.Full)
 }
 
 // Control command's effect and usage are identical to the Safe command.
-func (this *Roomba) Control() error {
-	this.Passive()
-	return this.WriteByte(130) // ?
+func (roomba *Roomba) Control() error {
+	roomba.Passive()
+	return roomba.WriteByte(constants.Control) // ?
 }
 
 // Clean command starts the default cleaning mode.
-func (this *Roomba) Clean() error {
-	return this.WriteByte(OpCodes["Clean"])
+func (roomba *Roomba) Clean() error {
+	return roomba.WriteByte(constants.Cover)
 }
 
 // TODO: Max command.
 
 // Spot command starts the Spot cleaning mode.
-func (this *Roomba) Spot() error {
-	return this.WriteByte(OpCodes["Spot"])
+func (roomba *Roomba) Spot() error {
+	return roomba.WriteByte(constants.Spot)
 }
 
 // SeekDock command sends Roomba to the dock.
-func (this *Roomba) SeekDock() error {
-	return this.WriteByte(OpCodes["SeekDock"])
-}
-
-// TODO: Schedule, Set Day/Time.
-
-// Power command powers down Roomba.
-func (this *Roomba) Power() error {
-	return this.WriteByte(OpCodes["Power"])
+func (roomba *Roomba) SeekDock() error {
+	return roomba.WriteByte(constants.Dock)
 }
 
 // Drive command controls Roomba’s drive wheels. It takes two 16-bit signed
@@ -121,19 +108,19 @@ func (this *Roomba) Power() error {
 // is in range (-500 – 500 mm/s), radius (-2000 – 2000 mm). Special cases:
 // straight = 32768 or 32767 = hex 8000 or 7FFF, turn in place clockwise = -1,
 // turn in place counter-clockwise = 1
-func (this *Roomba) Drive(velocity, radius int16) error {
+func (roomba *Roomba) Drive(velocity, radius int16) error {
 	if !(-500 <= velocity && velocity <= 500) {
 		return fmt.Errorf("invalid velocity: %d", velocity)
 	}
 	if !(-2000 <= radius && radius <= 2000) {
-		fmt.Errorf("invalid readius: %d", radius)
+		return fmt.Errorf("invalid readius: %d", radius)
 	}
-	return this.Write(OpCodes["Drive"], Pack([]interface{}{velocity, radius}))
+	return roomba.Write(constants.Drive, Pack([]interface{}{velocity, radius}))
 }
 
 // Stop commands is equivalent to Drive(0, 0).
-func (this *Roomba) Stop() error {
-	return this.Drive(0, 0)
+func (roomba *Roomba) Stop() error {
+	return roomba.Drive(0, 0)
 }
 
 // DirectDrive command lets you control the forward and backward motion of
@@ -143,12 +130,12 @@ func (this *Roomba) Stop() error {
 // velocity makes that wheel drive forward, while a negative velocity makes it
 // drive backward. Right wheel velocity (-500 – 500 mm/s). Left wheel velocity
 // (-500 – 500 mm/s).
-func (this *Roomba) DirectDrive(right, left int16) error {
+func (roomba *Roomba) DirectDrive(right, left int16) error {
 	if !(-500 <= right && right <= 500) ||
 		!(-500 <= left && left <= 500) {
 		return fmt.Errorf("invalid velocity. one of %d or %d", right, left)
 	}
-	return this.Write(OpCodes["DirectDrive"], Pack([]interface{}{right, left}))
+	return roomba.Write(constants.DriveDirect, Pack([]interface{}{right, left}))
 }
 
 // TODO: Drive PWM, Motors, PWM Motors commands.
@@ -158,39 +145,40 @@ func (this *Roomba) DirectDrive(right, left int16) error {
 // other for the intensity. Color: 0 = green, 255 = red. Intermediate values are
 // intermediate colors (orange, yellow, etc). Intensitiy: 0 = off, 255 = full
 // intensity. Intermediate values are intermediate intensities.
-func (this *Roomba) LEDs(check_robot, dock, spot, debris bool, power_color, power_intensity byte) error {
-	var led_bits byte
+func (roomba *Roomba) LEDs(advance, play bool, powerColor, powerIntensity byte) error {
+	var ledBits byte
 
-	for _, bit := range []bool{check_robot, dock, spot, debris} {
-		led_bits <<= 1
-		led_bits |= to_byte(bit)
+	if advance {
+		ledBits += 8
 	}
-	return this.Write(OpCodes["LEDs"], Pack([]interface{}{
-		led_bits, power_color, power_intensity}))
-}
+	if play {
+		ledBits += 2
+	}
 
-// TODO: Scheduling LEDs, Digit LEDs ASCII, Buttons, Song, Play.
+	return roomba.Write(constants.LEDs, Pack([]interface{}{
+		ledBits, powerColor, powerIntensity}))
+}
 
 // Sensors command requests the OI to send a packet of sensor data bytes. There
 // are 58 different sensor data packets. Each provides a value of a specific
 // sensor or group of sensors.
-func (this *Roomba) Sensors(packet_id byte) ([]byte, error) {
-	bytes_to_read, ok := constants.SENSOR_PACKET_LENGTH[packet_id]
+func (roomba *Roomba) Sensors(packetId constants.SensorCode) ([]byte, error) {
+	bytesToRead, ok := constants.SENSOR_PACKET_LENGTH[packetId]
 	if !ok {
-		return []byte{}, fmt.Errorf("unknown packet id requested: %d", packet_id)
+		return []byte{}, fmt.Errorf("unknown packet id requested: %d", packetId)
 	}
 
-	this.Write(OpCodes["Sensors"], []byte{packet_id})
+	roomba.Write(constants.Sensors, []byte{byte(packetId)})
 	var err error
 	var n int
-	result := make([]byte, bytes_to_read)
-	for byte(n) < bytes_to_read {
-		result_view := result[n:]
-		bytes_to_read -= byte(n)
-		n, err = this.Read(result_view)
+	result := make([]byte, bytesToRead)
+	for byte(n) < bytesToRead {
+		resultView := result[n:]
+		bytesToRead -= byte(n)
+		n, err = roomba.Read(resultView)
 		if err != nil {
 			log.Printf("error %v", err)
-			return result, fmt.Errorf("failed reading sensors data for packet id %d: %s", packet_id, err)
+			return result, fmt.Errorf("failed reading sensors data for packet id %d: %s", packetId, err)
 		}
 	}
 	return result, nil
@@ -199,32 +187,34 @@ func (this *Roomba) Sensors(packet_id byte) ([]byte, error) {
 // QueryList command lets you ask for a list of sensor packets. The result is
 // returned once, as in the Sensors command. The robot returns the packets in
 /// the order you specify.
-func (this *Roomba) QueryList(packet_ids []byte) ([][]byte, error) {
-	for _, packet_id := range packet_ids {
-		_, ok := constants.SENSOR_PACKET_LENGTH[packet_id]
+func (roomba *Roomba) QueryList(packetIds []constants.SensorCode) ([][]byte, error) {
+	for _, packetId := range packetIds {
+		_, ok := constants.SENSOR_PACKET_LENGTH[packetId]
 		if !ok {
-			return [][]byte{}, fmt.Errorf("unknown packet id requested: %d", packet_id)
+			return [][]byte{}, fmt.Errorf("unknown packet id requested: %d", packetId)
 		}
 	}
 
 	b := new(bytes.Buffer)
-	b.WriteByte(byte(len(packet_ids)))
-	b.Write(packet_ids)
-	this.Write(OpCodes["QueryList"], b.Bytes())
+	b.WriteByte(byte(len(packetIds)))
+	for _, id := range packetIds {
+		b.WriteByte(byte(id))
+	}
+	roomba.Write(constants.QueryList, b.Bytes())
 
 	var err error
 	var n int
-	result := make([][]byte, len(packet_ids))
-	for i, packet_id := range packet_ids {
-		bytes_to_read := constants.SENSOR_PACKET_LENGTH[packet_id]
-		result[i] = make([]byte, bytes_to_read)
+	result := make([][]byte, len(packetIds))
+	for i, packetId := range packetIds {
+		bytesToRead := constants.SENSOR_PACKET_LENGTH[packetId]
+		result[i] = make([]byte, bytesToRead)
 		err, n = nil, 0
-		for byte(n) < bytes_to_read {
-			result_view := result[i][n:]
-			bytes_to_read -= byte(n)
-			n, err = this.Read(result_view)
+		for byte(n) < bytesToRead {
+			resultView := result[i][n:]
+			bytesToRead -= byte(n)
+			n, err = roomba.Read(resultView)
 			if err != nil {
-				return result, fmt.Errorf("failed reading sensors data for packet id %d: %s", packet_id, err)
+				return result, fmt.Errorf("failed reading sensors data for packet id %d: %s", packetId, err)
 			}
 		}
 	}
@@ -233,39 +223,39 @@ func (this *Roomba) QueryList(packet_ids []byte) ([][]byte, error) {
 
 // PauseStream command lets you stop steam without clearing the list of
 // requested packets.
-func (this *Roomba) PauseStream() {
-	this.StreamPaused <- true
+func (roomba *Roomba) PauseStream() {
+	roomba.StreamPaused <- true
 }
 
-func (this *Roomba) ReadStream(packet_ids []byte, out chan<- [][]byte) {
-	var data_length byte
-	for _, packet_id := range packet_ids {
-		packet_length, ok := constants.SENSOR_PACKET_LENGTH[packet_id]
+func (roomba *Roomba) ReadStream(packetIds []constants.SensorCode, out chan<- [][]byte) {
+	var dataLength byte
+	for _, packetId := range packetIds {
+		packetLength, ok := constants.SENSOR_PACKET_LENGTH[packetId]
 		if !ok {
-			log.Printf("unknown packet id requested: %d", packet_id)
+			log.Printf("unknown packet id requested: %d", packetId)
 			return
 		}
-		data_length += packet_length
+		dataLength += packetLength
 	}
 
 	// Input buffer. 3 is for 19, N-bytes and checksum.
-	buf := make([]byte, data_length+byte(len(packet_ids))+3)
+	buf := make([]byte, dataLength+byte(len(packetIds))+3)
 
 	for {
 	Loop:
 		select {
-		case <-this.StreamPaused:
+		case <-roomba.StreamPaused:
 			// Pause stream.
-			this.Write(OpCodes["ResumeStream"], []byte{0})
+			roomba.Write(constants.PauseResumeStream, []byte{0})
 			close(out)
 			return
 		default:
 			// Read single stream frame.
-			bytes_read := 0
-			for bytes_read < len(buf) {
-				n, err := this.S.Read(buf[bytes_read:])
+			bytesRead := 0
+			for bytesRead < len(buf) {
+				n, err := roomba.S.Read(buf[bytesRead:])
 				if n != 0 {
-					bytes_read += n
+					bytesRead += n
 				}
 				if err != nil {
 					if err == io.EOF {
@@ -275,32 +265,32 @@ func (this *Roomba) ReadStream(packet_ids []byte, out chan<- [][]byte) {
 				}
 			}
 			// Process frame.
-			buf_r := bytes.NewReader(buf)
-			if b, err := buf_r.ReadByte(); err != nil || b != 19 {
+			bufR := bytes.NewReader(buf)
+			if b, err := bufR.ReadByte(); err != nil || b != 19 {
 				log.Fatalf("stream data doesn't start with header 19")
 				return
 			}
-			if b, err := buf_r.ReadByte(); err != nil || b != byte(len(buf)-3) {
+			if b, err := bufR.ReadByte(); err != nil || b != byte(len(buf)-3) {
 				log.Fatalf("invalid N-bytes: %d, expected %d.", buf[1],
 					len(buf)-3)
 			}
 
-			result := make([][]byte, len(packet_ids))
+			result := make([][]byte, len(packetIds))
 
 			i := 0
 			// Used for verifying checksum.
 			sum := byte(len(buf) - 3) // N-bytes
-			packet_id, err := buf_r.ReadByte()
-			for ; err == nil; packet_id, err = buf_r.ReadByte() {
-				sum += packet_id
-				bytes_to_read := int(constants.SENSOR_PACKET_LENGTH[packet_id])
-				bytes_read := 0
-				result[i] = make([]byte, bytes_to_read)
+			packetId, err := bufR.ReadByte()
+			for ; err == nil; packetId, err = bufR.ReadByte() {
+				sum += packetId
+				bytesToRead := int(constants.SENSOR_PACKET_LENGTH[constants.SensorCode(packetId)])
+				bytesRead := 0
+				result[i] = make([]byte, bytesToRead)
 
-				for bytes_to_read > 0 {
-					n, err := buf_r.Read(result[i][bytes_read:])
-					bytes_read += n
-					bytes_to_read -= n
+				for bytesToRead > 0 {
+					n, err := bufR.Read(result[i][bytesRead:])
+					bytesRead += n
+					bytesToRead -= n
 					if err != nil {
 						log.Fatalf("error reading packet data")
 					}
@@ -309,16 +299,16 @@ func (this *Roomba) ReadStream(packet_ids []byte, out chan<- [][]byte) {
 					sum += b
 				}
 				i += 1
-				if buf_r.Len() == 1 {
+				if bufR.Len() == 1 {
 					break
 				}
 			}
 
-			expected_checksum, err := buf_r.ReadByte()
+			expectedChecksum, err := bufR.ReadByte()
 			if err != nil {
 				log.Fatalf("missing checksum")
 			}
-			sum += expected_checksum
+			sum += expectedChecksum
 			if sum != 0 {
 				log.Fatalf("computed checksum didn't match: %d", sum)
 			}
@@ -332,16 +322,18 @@ func (this *Roomba) ReadStream(packet_ids []byte, out chan<- [][]byte) {
 // This method of requesting sensor data is best if you are controlling Roomba
 // over a wireless network (which has poor real-time characteristics) with
 // software running on a desktop computer.
-func (this *Roomba) Stream(packet_ids []byte) (<-chan [][]byte, error) {
+func (roomba *Roomba) Stream(packetIds []constants.SensorCode) (<-chan [][]byte, error) {
 	b := new(bytes.Buffer)
-	b.WriteByte(byte(len(packet_ids)))
-	b.Write(packet_ids)
-	err := this.Write(OpCodes["Stream"], b.Bytes())
+	b.WriteByte(byte(len(packetIds)))
+	for _, pid := range packetIds {
+		b.WriteByte(byte(pid))
+	}
+	err := roomba.Write(constants.SensorStream, b.Bytes())
 	if err != nil {
 		return nil, err
 	}
 
 	out := make(chan [][]byte)
-	go this.ReadStream(packet_ids, out)
+	go roomba.ReadStream(packetIds, out)
 	return out, nil
 }

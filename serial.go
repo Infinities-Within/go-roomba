@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/infinities-within/go-roomba/constants"
 	"log"
 
 	"github.com/tarm/goserial"
@@ -25,32 +26,32 @@ func Pack(data []interface{}) []byte {
 }
 
 // Configures and opens the given serial port.
-func (this *Roomba) Open(baud uint) error {
+func (roomba *Roomba) Open(baud uint) error {
 	if baud != 115200 && baud != 19200 {
 		return errors.New(fmt.Sprintf("invalid baud rate: %d. Must be one of 115200, 19200", baud))
 	}
 
-	c := &serial.Config{Name: this.PortName, Baud: int(baud)}
+	c := &serial.Config{Name: roomba.PortName, Baud: int(baud)}
 	port, err := serial.OpenPort(c)
 
 	if err != nil {
-		log.Printf("failed to open serial port: %s", this.PortName)
+		log.Printf("failed to open serial port: %s", roomba.PortName)
 		return err
 	}
-	this.S = port
-	log.Printf("opened serial port: %s", this.PortName)
+	roomba.S = port
+	log.Printf("opened serial port: %s", roomba.PortName)
 	return nil
 }
 
 // Writes the given opcode byte and a sequence of data bytes to the serial port.
-func (this *Roomba) Write(opcode byte, p []byte) error {
+func (roomba *Roomba) Write(opcode constants.OpCode, p []byte) error {
 	log.Printf("Writing opcode: %v, data %v", opcode, p)
-	n, err := this.S.Write([]byte{opcode})
+	n, err := roomba.S.Write([]byte{byte(opcode)})
 	if n != 1 || err != nil {
 		return fmt.Errorf("failed writing opcode %d to serial interface",
 			opcode)
 	}
-	n, err = this.S.Write(p)
+	n, err = roomba.S.Write(p)
 	if n != len(p) || err != nil {
 		return fmt.Errorf("failed writing command to serial interface: % d", p)
 	}
@@ -58,11 +59,11 @@ func (this *Roomba) Write(opcode byte, p []byte) error {
 }
 
 // Writes a single byte to the serial port.
-func (this *Roomba) WriteByte(opcode byte) error {
-	return this.Write(opcode, []byte{})
+func (roomba *Roomba) WriteByte(opcode constants.OpCode) error {
+	return roomba.Write(opcode, []byte{})
 }
 
 // Reads bytes from the serial port.
-func (this *Roomba) Read(p []byte) (n int, err error) {
-	return this.S.Read(p)
+func (roomba *Roomba) Read(p []byte) (n int, err error) {
+	return roomba.S.Read(p)
 }
